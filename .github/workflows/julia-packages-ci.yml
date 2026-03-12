@@ -1,0 +1,54 @@
+name: Julia Tests
+
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: Julia version to test against
+        type: string
+        default: '1'
+
+jobs:
+  find-packages:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.find.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find Julia packages
+        id: find
+        run: |
+          packages=$(find . -name "Project.toml" -not -path "*/.git/*" \
+            | while read -r f; do
+              # A valid Julia package has both `name` and `uuid` at the top level
+              if grep -qE "^name\s*=" "$f" && grep -qE "^uuid\s*=" "$f"; then
+                dirname "$f"
+              fi
+            done | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: find-packages
+    if: needs.find-packages.outputs.packages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.find-packages.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ inputs.julia-version }}
+
+      - uses: julia-actions/cache@v2
+
+      - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: ${{ matrix.package }}
+
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          project: ${{ matrix.package }}
