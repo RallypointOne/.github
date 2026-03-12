@@ -1,4 +1,4 @@
-name: Julia Tests
+name: Julia Packages CI
 
 on:
   workflow_call:
